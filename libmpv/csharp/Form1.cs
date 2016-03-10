@@ -65,7 +65,7 @@ namespace mpv
 
         private void LoadMpvDynamic()
         {
-            _libMpvDll = LoadLibrary("mpv-1.dll");
+            _libMpvDll = LoadLibrary("mpv-1.dll"); // The dll is included in the DEV builds by lachs0r: https://mpv.srsfckn.biz/
             _mpvCreate = (MpvCreate)GetDllType(typeof(MpvCreate), "mpv_create");
             _mpvInitialize = (MpvInitialize)GetDllType(typeof(MpvInitialize), "mpv_initialize");
             _mpvTerminateDestroy = (MpvTerminateDestroy)GetDllType(typeof(MpvTerminateDestroy), "mpv_terminate_destroy");
