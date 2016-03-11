@@ -8,7 +8,7 @@ namespace mpv
 {
     public partial class Form1 : Form
     {
-        const int MpvFormatString = 1;
+        private const int MpvFormatString = 1;
         private IntPtr _libMpvDll;
         private IntPtr _mpvHandle;
 
@@ -35,7 +35,7 @@ namespace mpv
         private MpvTerminateDestroy _mpvTerminateDestroy;
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        private delegate int MpvSetOption(IntPtr mpvHandle, byte[] name, int format, ref uint data);
+        private delegate int MpvSetOption(IntPtr mpvHandle, byte[] name, int format, ref int data);
         private MpvSetOption _mpvSetOption;
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -49,6 +49,10 @@ namespace mpv
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate int MpvSetProperty(IntPtr mpvHandle, byte[] name, int format, ref byte[] data);
         private MpvSetProperty _mpvSetProperty;
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate void MpvFree(IntPtr data);
+        private MpvFree _mpvFree;
 
         public Form1()
         {
@@ -74,6 +78,7 @@ namespace mpv
             _mpvSetOptionString = (MpvSetOptionString)GetDllType(typeof(MpvSetOptionString), "mpv_set_option_string");
             _mpvGetPropertyString = (MpvGetPropertystring)GetDllType(typeof(MpvGetPropertystring), "mpv_get_property");
             _mpvSetProperty = (MpvSetProperty)GetDllType(typeof(MpvSetProperty), "mpv_set_property");
+            _mpvFree = (MpvFree)GetDllType(typeof(MpvFree), "mpv_free");            
         }
 
         public void Pause()
@@ -81,8 +86,8 @@ namespace mpv
             if (_mpvHandle == IntPtr.Zero)
                 return;
 
-            var bytes = Encoding.UTF8.GetBytes("yes\0");
-            _mpvSetProperty(_mpvHandle, Encoding.UTF8.GetBytes("pause\0"), MpvFormatString, ref bytes);
+            var bytes = GetUtf8Bytes("yes");
+            _mpvSetProperty(_mpvHandle, GetUtf8Bytes("pause"), MpvFormatString, ref bytes);
         }
 
         private void Play()
@@ -90,8 +95,8 @@ namespace mpv
             if (_mpvHandle == IntPtr.Zero)
                 return;
 
-            var bytes = Encoding.UTF8.GetBytes("no\0");
-            _mpvSetProperty(_mpvHandle, Encoding.UTF8.GetBytes("pause\0"), MpvFormatString, ref bytes);
+            var bytes = GetUtf8Bytes("no");
+            _mpvSetProperty(_mpvHandle, GetUtf8Bytes("pause"), MpvFormatString, ref bytes);
         }
 
         public bool IsPaused()
@@ -99,9 +104,11 @@ namespace mpv
             if (_mpvHandle == IntPtr.Zero)
                 return true;
 
-            IntPtr lpBuffer = Marshal.AllocHGlobal(10);
-            _mpvGetPropertyString(_mpvHandle, Encoding.UTF8.GetBytes("pause\0"), MpvFormatString, ref lpBuffer);
-            return Marshal.PtrToStringAnsi(lpBuffer) == "yes";
+            var lpBuffer = IntPtr.Zero;
+            _mpvGetPropertyString(_mpvHandle, GetUtf8Bytes("pause"), MpvFormatString, ref lpBuffer);
+            var isPaused = Marshal.PtrToStringAnsi(lpBuffer) == "yes";
+            _mpvFree(lpBuffer);
+            return isPaused;
         }
 
         public void SetTime(double value)
@@ -110,6 +117,11 @@ namespace mpv
                 return;
 
             _mpvCommand(_mpvHandle, new[] { "seek", value.ToString(CultureInfo.InvariantCulture), "absolute", null });
+        }
+
+        private static byte[] GetUtf8Bytes(string s)
+        {
+            return Encoding.UTF8.GetBytes(s + "\0");
         }
 
         private void buttonPlay_Click(object sender, EventArgs e)
@@ -126,11 +138,11 @@ namespace mpv
                 return;
 
             _mpvInitialize.Invoke(_mpvHandle);
-            _mpvSetOptionString(_mpvHandle, Encoding.UTF8.GetBytes("vo\0"), Encoding.UTF8.GetBytes("direct3d\0"));
-            _mpvSetOptionString(_mpvHandle, Encoding.UTF8.GetBytes("keep-open\0"), Encoding.UTF8.GetBytes("always\0"));
+            _mpvSetOptionString(_mpvHandle, GetUtf8Bytes("vo"), GetUtf8Bytes("direct3d"));
+            _mpvSetOptionString(_mpvHandle, GetUtf8Bytes("keep-open"), GetUtf8Bytes("always"));
             int mpvFormatInt64 = 4;
-            uint windowId = (uint)pictureBox1.Handle.ToInt64();
-            _mpvSetOption(_mpvHandle, Encoding.UTF8.GetBytes("wid\0"), mpvFormatInt64, ref windowId);
+            var windowId = (int)pictureBox1.Handle;
+            _mpvSetOption(_mpvHandle, GetUtf8Bytes("wid"), mpvFormatInt64, ref windowId);
             _mpvCommand(_mpvHandle, new[] { "loadfile", textBoxVideoSampleFileName.Text, null });
         }
 
