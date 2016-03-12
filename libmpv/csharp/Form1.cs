@@ -35,7 +35,7 @@ namespace mpv
         private MpvTerminateDestroy _mpvTerminateDestroy;
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        private delegate int MpvSetOption(IntPtr mpvHandle, byte[] name, int format, ref int data);
+        private delegate int MpvSetOption(IntPtr mpvHandle, byte[] name, int format, ref long data);
         private MpvSetOption _mpvSetOption;
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -141,7 +141,7 @@ namespace mpv
             _mpvSetOptionString(_mpvHandle, GetUtf8Bytes("vo"), GetUtf8Bytes("direct3d"));
             _mpvSetOptionString(_mpvHandle, GetUtf8Bytes("keep-open"), GetUtf8Bytes("always"));
             int mpvFormatInt64 = 4;
-            var windowId = (int)pictureBox1.Handle;
+            var windowId = pictureBox1.Handle.ToInt64();
             _mpvSetOption(_mpvHandle, GetUtf8Bytes("wid"), mpvFormatInt64, ref windowId);
             _mpvCommand(_mpvHandle, new[] { "loadfile", textBoxVideoSampleFileName.Text, null });
         }
