@@ -27,7 +27,7 @@ namespace mpv
         private MpvInitialize _mpvInitialize;
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        private delegate int MpvCommand(IntPtr mpvHandle, [MarshalAs(UnmanagedType.LPArray)] string[] args);
+        private delegate int MpvCommand(IntPtr mpvHandle, IntPtr strings);
         private MpvCommand _mpvCommand;
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -52,7 +52,7 @@ namespace mpv
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate void MpvFree(IntPtr data);
-        private MpvFree _mpvFree;
+        private MpvFree _mpvFree;       
 
         public Form1()
         {
@@ -78,7 +78,7 @@ namespace mpv
             _mpvSetOptionString = (MpvSetOptionString)GetDllType(typeof(MpvSetOptionString), "mpv_set_option_string");
             _mpvGetPropertyString = (MpvGetPropertystring)GetDllType(typeof(MpvGetPropertystring), "mpv_get_property");
             _mpvSetProperty = (MpvSetProperty)GetDllType(typeof(MpvSetProperty), "mpv_set_property");
-            _mpvFree = (MpvFree)GetDllType(typeof(MpvFree), "mpv_free");            
+            _mpvFree = (MpvFree)GetDllType(typeof(MpvFree), "mpv_free");
         }
 
         public void Pause()
@@ -116,12 +116,46 @@ namespace mpv
             if (_mpvHandle == IntPtr.Zero)
                 return;
 
-            _mpvCommand(_mpvHandle, new[] { "seek", value.ToString(CultureInfo.InvariantCulture), "absolute", null });
+            DoMpvCommand("seek", value.ToString(CultureInfo.InvariantCulture), "absolute");
         }
 
         private static byte[] GetUtf8Bytes(string s)
         {
             return Encoding.UTF8.GetBytes(s + "\0");
+        }
+
+        public static IntPtr AllocateUtf8IntPtrArrayWithSentinel(string[] arr, out IntPtr[] byteArrayPointers)
+        {
+            int numberOfStrings = arr.Length + 1; // add extra element for extra null pointer last (sentinel)
+            byteArrayPointers = new IntPtr[numberOfStrings];
+            int dim = IntPtr.Size * numberOfStrings;
+            IntPtr rootPointer = Marshal.AllocCoTaskMem(dim);
+            for (int index = 0; index < arr.Length; index++)
+            {
+                string arg = arr[index];
+                if (arg == null)
+                {
+                    throw new Exception("AllocateUtf8IntPtrArrayWithSentinel cannot handle null strings");
+                }
+                var bytes = GetUtf8Bytes(arr[index]);
+                IntPtr unmanagedPointer = Marshal.AllocHGlobal(bytes.Length);
+                Marshal.Copy(bytes, 0, unmanagedPointer, bytes.Length);
+                byteArrayPointers[index] = unmanagedPointer;
+            }
+            Marshal.Copy(byteArrayPointers, 0, rootPointer, numberOfStrings);
+            return rootPointer;
+        }
+
+        private void DoMpvCommand(params string[] args)
+        {
+            IntPtr[] byteArrayPointers;
+            var mainPtr = AllocateUtf8IntPtrArrayWithSentinel(args, out byteArrayPointers);
+            _mpvCommand(_mpvHandle, mainPtr);
+            foreach (var ptr in byteArrayPointers)
+            {
+                Marshal.FreeHGlobal(ptr);
+            }
+            Marshal.FreeHGlobal(mainPtr);
         }
 
         private void buttonPlay_Click(object sender, EventArgs e)
@@ -143,7 +177,7 @@ namespace mpv
             int mpvFormatInt64 = 4;
             var windowId = pictureBox1.Handle.ToInt64();
             _mpvSetOption(_mpvHandle, GetUtf8Bytes("wid"), mpvFormatInt64, ref windowId);
-            _mpvCommand(_mpvHandle, new[] { "loadfile", textBoxVideoSampleFileName.Text, null });
+            DoMpvCommand("loadfile", textBoxVideoSampleFileName.Text);
         }
 
         private void buttonPlayPause_Click(object sender, EventArgs e)
