@@ -52,7 +52,7 @@ namespace mpv
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate void MpvFree(IntPtr data);
-        private MpvFree _mpvFree;       
+        private MpvFree _mpvFree;
 
         public Form1()
         {
@@ -128,15 +128,9 @@ namespace mpv
         {
             int numberOfStrings = arr.Length + 1; // add extra element for extra null pointer last (sentinel)
             byteArrayPointers = new IntPtr[numberOfStrings];
-            int dim = IntPtr.Size * numberOfStrings;
-            IntPtr rootPointer = Marshal.AllocCoTaskMem(dim);
+            IntPtr rootPointer = Marshal.AllocCoTaskMem(IntPtr.Size * numberOfStrings);
             for (int index = 0; index < arr.Length; index++)
             {
-                string arg = arr[index];
-                if (arg == null)
-                {
-                    throw new Exception("AllocateUtf8IntPtrArrayWithSentinel cannot handle null strings");
-                }
                 var bytes = GetUtf8Bytes(arr[index]);
                 IntPtr unmanagedPointer = Marshal.AllocHGlobal(bytes.Length);
                 Marshal.Copy(bytes, 0, unmanagedPointer, bytes.Length);
