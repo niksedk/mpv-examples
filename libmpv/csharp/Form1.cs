@@ -1,8 +1,9 @@
-﻿using System;
+using System;
 using System.Globalization;
 using System.Text;
 using System.Windows.Forms;
 using System.Runtime.InteropServices;
+using System.IO;
 
 namespace mpv
 {
@@ -29,6 +30,10 @@ namespace mpv
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate int MpvCommand(IntPtr mpvHandle, IntPtr strings);
         private MpvCommand _mpvCommand;
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate int MpvCommandNode(IntPtr mpvHandle, IntPtr utf8Strings, IntPtr result);
+        private MpvCommandNode _mpvCommandNode;
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate int MpvTerminateDestroy(IntPtr mpvHandle);
@@ -74,6 +79,7 @@ namespace mpv
             _mpvInitialize = (MpvInitialize)GetDllType(typeof(MpvInitialize), "mpv_initialize");
             _mpvTerminateDestroy = (MpvTerminateDestroy)GetDllType(typeof(MpvTerminateDestroy), "mpv_terminate_destroy");
             _mpvCommand = (MpvCommand)GetDllType(typeof(MpvCommand), "mpv_command");
+            _mpvCommandNode = (MpvCommandNode)GetDllType(typeof(MpvCommandNode), "mpv_command_node");
             _mpvSetOption = (MpvSetOption)GetDllType(typeof(MpvSetOption), "mpv_set_option");
             _mpvSetOptionString = (MpvSetOptionString)GetDllType(typeof(MpvSetOptionString), "mpv_set_option_string");
             _mpvGetPropertyString = (MpvGetPropertystring)GetDllType(typeof(MpvGetPropertystring), "mpv_get_property");
@@ -166,8 +172,8 @@ namespace mpv
                 return;
 
             _mpvInitialize.Invoke(_mpvHandle);
-            _mpvSetOptionString(_mpvHandle, GetUtf8Bytes("vo"), GetUtf8Bytes("direct3d"));
             _mpvSetOptionString(_mpvHandle, GetUtf8Bytes("keep-open"), GetUtf8Bytes("always"));
+//            _mpvSetOptionString(_mpvHandle, GetUtf8Bytes("vo"), GetUtf8Bytes("direct3d"));
             int mpvFormatInt64 = 4;
             var windowId = pictureBox1.Handle.ToInt64();
             _mpvSetOption(_mpvHandle, GetUtf8Bytes("wid"), mpvFormatInt64, ref windowId);
@@ -203,5 +209,140 @@ namespace mpv
             if (_mpvHandle != IntPtr.Zero)
                 _mpvTerminateDestroy(_mpvHandle);
         }
+
+        public static byte[] ReadAllBytesShared(string path)
+        {
+            using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            {
+                var index = 0;
+                var fileLength = fs.Length;
+                if (fileLength > int.MaxValue)
+                    throw new IOException("File too long");
+                var count = (int)fileLength;
+                var bytes = new byte[count];
+                while (count > 0)
+                {
+                    var n = fs.Read(bytes, index, count);
+                    if (n == 0)
+                        throw new InvalidOperationException("End of file reached before expected");
+                    index += n;
+                    count -= n;
+                }
+                return bytes;
+            }
+        }
+
+        bool _logEnabled = false;
+
+        private void buttonScreenshotRaw_Click(object sender, EventArgs e)
+        {
+            var logFileName = "mpv-log.txt";
+            if (!_logEnabled)
+            {
+                _mpvSetOptionString(_mpvHandle, GetUtf8Bytes("log-file"), GetUtf8Bytes(logFileName));
+                _logEnabled = true;
+            }
+
+            if (_mpvHandle == IntPtr.Zero)
+                return;
+
+            var input = MakeMpvNodeArary("screenshot-raw", "video");
+            IntPtr inputPtr = Marshal.AllocHGlobal(Marshal.SizeOf(input));
+            Marshal.StructureToPtr(input, inputPtr, false);
+
+            MpvNode ouput = new MpvNode
+            {
+                Format = MpvFormat.NodeMap
+            };
+            IntPtr ouputPtr = Marshal.AllocCoTaskMem(Marshal.SizeOf(ouput));
+            Marshal.StructureToPtr(ouput, ouputPtr, false);
+
+            var res = _mpvCommandNode(_mpvHandle, inputPtr, ouputPtr); // mpv_command_node       
+            var log = string.Empty;
+            if (File.Exists(logFileName))
+            {
+                log = Encoding.UTF8.GetString(ReadAllBytesShared(logFileName));
+            }
+            MessageBox.Show("Return code: " + res + Environment.NewLine + log);
+        } 
+
+        public enum MpvFormat
+        {
+            None = 0,
+            String = 1,
+            OsdString = 2,
+            Flag = 3,
+            Int64 = 4,
+            Double = 5,
+            Node = 6,
+            NodeArray = 7,
+            NodeMap = 8,
+            ByteArray = 9
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct MpvNodeList
+        {
+            public int Number;
+            public IntPtr Values;
+            public IntPtr Keys;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct MpvNode
+        {
+            public IntPtr Ptr; // mpv node list
+            public MpvFormat Format;
+        }
+
+        private MpvNode MakeMpvNodeArary(params string[] args)
+        {
+
+            //    new MpvNode  -- see https://raw.githubusercontent.com/jaseg/python-mpv/master/mpv.py
+            //    {
+            //        Format = MPV_NODE_ARRAY,
+            //        List = new MpvNodeList
+            //        {
+            //            .num = len(l),
+            //            .keys = NULL,
+            //            .values = struct mpv_node[len(l)] {
+            //                { .format = MPV_NODE_STRING, .u.string = l[0] },
+            //                { .format = MPV_NODE_STRING, .u.string = l[1] },
+            //                ...
+            //            }
+            //        }
+            //    }
+
+            // build nodes for Values in NodeList
+            var parameters = new IntPtr[args.Length];
+            for (int i = 0; i < args.Length; i++)
+            {
+                var bytes = GetUtf8Bytes(args[i]);
+                IntPtr stringPointer = Marshal.AllocHGlobal(bytes.Length);
+                Marshal.Copy(bytes, 0, stringPointer, bytes.Length);
+                var node = new MpvNode { Format = MpvFormat.String, Ptr = stringPointer };
+                IntPtr nodePtr = Marshal.AllocHGlobal(Marshal.SizeOf(node));
+                Marshal.StructureToPtr(node, nodePtr, false);
+                parameters[i] = nodePtr;
+            }
+            IntPtr rootPointer = Marshal.AllocHGlobal(IntPtr.Size * parameters.Length);
+            Marshal.Copy(parameters, 0, rootPointer, args.Length);
+
+            var nodeList = new MpvNodeList()
+            {
+                Number = args.Length,
+                Keys = IntPtr.Zero,
+                Values = rootPointer
+            };
+            IntPtr nodeArrayPtr = Marshal.AllocHGlobal(Marshal.SizeOf(nodeList));
+            Marshal.StructureToPtr(nodeList, nodeArrayPtr, false);
+
+            return new MpvNode
+            {
+                Format = MpvFormat.NodeArray,
+                Ptr = nodeArrayPtr,
+            };
+        }
+
     }
 }

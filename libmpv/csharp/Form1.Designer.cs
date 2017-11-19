@@ -40,6 +40,7 @@ namespace mpv
             this.buttonStop = new System.Windows.Forms.Button();
             this.buttonLoadVideo = new System.Windows.Forms.Button();
             this.openFileDialog1 = new System.Windows.Forms.OpenFileDialog();
+            this.buttonScreenshotRaw = new System.Windows.Forms.Button();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).BeginInit();
             this.SuspendLayout();
             // 
@@ -100,11 +101,23 @@ namespace mpv
             // 
             this.openFileDialog1.FileName = "openFileDialog1";
             // 
+            // buttonScreenshotRaw
+            // 
+            this.buttonScreenshotRaw.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
+            this.buttonScreenshotRaw.Location = new System.Drawing.Point(191, 351);
+            this.buttonScreenshotRaw.Name = "buttonScreenshotRaw";
+            this.buttonScreenshotRaw.Size = new System.Drawing.Size(108, 23);
+            this.buttonScreenshotRaw.TabIndex = 11;
+            this.buttonScreenshotRaw.Text = "screenshot-raw";
+            this.buttonScreenshotRaw.UseVisualStyleBackColor = true;
+            this.buttonScreenshotRaw.Click += new System.EventHandler(this.buttonScreenshotRaw_Click);
+            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(534, 411);
+            this.Controls.Add(this.buttonScreenshotRaw);
             this.Controls.Add(this.buttonLoadVideo);
             this.Controls.Add(this.buttonStop);
             this.Controls.Add(this.buttonPlayPause);
@@ -128,6 +141,7 @@ namespace mpv
         private Button buttonStop;
         private Button buttonLoadVideo;
         private OpenFileDialog openFileDialog1;
+        private Button buttonScreenshotRaw;
     }
 }
 

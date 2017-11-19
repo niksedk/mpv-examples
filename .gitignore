@@ -3,3 +3,5 @@
 ################################################################################
 
 /libmpv/csharp/obj/Debug
+/libmpv/csharp/.vs/WinForm/v14
+/libmpv/csharp/bin/Debug
